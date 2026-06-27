@@ -12,7 +12,9 @@ Environment overrides:
 from __future__ import annotations
 
 import json
+import logging as _logging
 import os
+import subprocess
 import sys
 
 # mitmproxy loads this file as a top-level script, so the `detector` package
@@ -30,6 +32,33 @@ from detector.sse import reconstruct_model, reconstruct_response  # noqa: E402
 
 from dlp.engine import check_prompt  # noqa: E402
 from dlp.blocked_page import render_blocked_page  # noqa: E402
+
+_dlp_log = _logging.getLogger("dlp")
+_BLOCKED_PAGE_PATH = "/tmp/dlp_blocked.html"
+
+
+def _open_blocked_in_browser(html_body: str) -> None:
+    """Write the blocked page to a temp file and open it in the Windows browser.
+
+    Uses WSL2 interop: wslpath converts the Linux path to a Windows UNC path
+    (\\\\wsl.localhost\\<distro>\\tmp\\dlp_blocked.html), then cmd.exe start
+    opens it in the Windows default browser.  Fails open — any error is logged
+    but never propagates to the proxy.
+    """
+    try:
+        with open(_BLOCKED_PAGE_PATH, "w", encoding="utf-8") as f:
+            f.write(html_body)
+        win_path = subprocess.check_output(
+            ["wslpath", "-w", _BLOCKED_PAGE_PATH],
+            stderr=subprocess.DEVNULL,
+        ).decode().strip()
+        subprocess.Popen(
+            ["cmd.exe", "/c", "start", "", win_path],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+    except Exception as exc:
+        _dlp_log.warning("dlp: could not open blocked page in browser: %s", exc)
 
 
 def _dlp_summary(dlp_result: dict):
@@ -76,12 +105,8 @@ class LLMDetector:
                     "response": None,
                     "dlp": _dlp_summary(dlp_result),
                 })
-                # Serve a branded HTML block page instead of a bare JSON error.
-                # NB: chat apps fetch the LLM over XHR, so this body usually won't render
-                # in the chat UI itself (the app shows its own error) — it renders on
-                # direct navigation to the URL or in tools. The audit record above is the
-                # source of truth for the block.
                 html_body = render_blocked_page(provider.name, dlp_result)
+                _open_blocked_in_browser(html_body)
                 flow.response = http.Response.make(
                     403,
                     html_body.encode("utf-8"),
