@@ -1,0 +1,137 @@
+# Provider detection rules for the LLM Traffic Detector.
+#
+# A flow is classified to a provider when:
+#   1. flow.request host matches one of `hosts`, AND
+#   2. the path does NOT match any `ignore_paths` entry (telemetry/noise), AND
+#   3. the path matches one of the `endpoints` rules.
+#
+# Each endpoint says where to find the prompt + model in the request JSON body
+# (see detector/extract.py for the dotted-path mini-language) and which SSE
+# handler reconstructs the streamed response (see detector/sse.py).
+
+providers:
+  - name: chatgpt
+    hosts:
+      - chatgpt.com
+      - chat.openai.com
+    ignore_paths:            # substring match -> skip as noise
+      - "/ces/"
+      - "/backend-api/sentinel/"
+      - "/backend-api/aip/connectors/"
+      - "/conversation/init"
+      - "generate_autocompletions"
+    endpoints:
+      # Exact match excludes the /f/conversation/prepare keystroke-debounce noise.
+      - path: "/backend-api/f/conversation"
+        match: exact
+        prompt_path: "messages[-1].content.parts[0]"
+        model_path: "model"
+    response: sse
+    sse_handler: chatgpt
+
+  # Implemented & tested against a real claude.ai capture (claude.json).
+  # The web app posts a turn to /api/organizations/{org}/chat_conversations/{conv}/completion
+  # with the user text at `prompt` and the model at `model`. The streamed reply is
+  # Anthropic SSE (content_block_delta / text_delta) — see parse_claude_sse in sse.py.
+  # (api.anthropic.com developer API uses a different /v1/messages shape — left for later.)
+  - name: claude
+    hosts:
+      - claude.ai
+    ignore_paths:
+      - "/title"               # title-generation request (contains the text, not the turn)
+      - "/notification/"
+      - "/cdn-cgi/"
+    endpoints:
+      - path: "/completion"
+        match: contains
+        prompt_path: "prompt"
+        model_path: "model"
+    response: sse
+    sse_handler: claude
+
+  # Implemented & tested against a real gemini.google.com capture (gemini.json).
+  # The web app posts a turn to the Bard RPC endpoint
+  # `/_/BardChatUi/data/assistant.lamda.BardFrontendService/StreamGenerate`. Its
+  # body is form-encoded (`f.req=<urlencoded JSON>&at=...`) with the prompt double-
+  # JSON-nested, so a code handler (`request_handler: gemini`, see extract.py) reads
+  # it rather than the dotted-path language. The streamed reply is Google's chunked
+  # `wrb.fr` format reconstructed by parse_gemini_sse in sse.py; the model name only
+  # appears in the response (recovered by parse_gemini_model). The `/batchexecute`
+  # calls are conversation-management noise.
+  # (The generativelanguage.googleapis.com developer API uses a different
+  # :streamGenerateContent shape — left for later.)
+  - name: gemini
+    hosts:
+      - gemini.google.com
+    ignore_paths:
+      - "/batchexecute"        # conversation-management RPC noise
+    endpoints:
+      - path: "StreamGenerate"
+        match: contains
+        request_handler: gemini
+    response: sse
+    sse_handler: gemini
+
+  # Implemented & tested against a real www.perplexity.ai capture (perplexity.json).
+  # The web app posts a turn to /rest/sse/perplexity_ask with a clean JSON body:
+  # the user text at `query_str` and the requested model tier at
+  # `params.model_preference`. The streamed reply is standard `event: message` /
+  # `data: {json}` SSE whose answer lives at a block's `markdown_block.answer` —
+  # reconstructed by parse_perplexity_sse in sse.py. The /rest/event/analytics,
+  # /rest/thread/*, /rest/autosuggest/* etc. calls are telemetry/UI noise.
+  - name: perplexity
+    hosts:
+      - www.perplexity.ai
+    ignore_paths:
+      - "/rest/event/analytics"   # telemetry noise
+      - "/cdn-cgi/"
+    endpoints:
+      - path: "/rest/sse/perplexity_ask"
+        match: exact
+        prompt_path: "query_str"
+        model_path: "params.model_preference"
+    response: sse
+    sse_handler: perplexity
+
+  # Implemented & tested against a real grok.com capture (grok.json).
+  # The web app posts a turn to /rest/app-chat/conversations/new (first message)
+  # or /rest/app-chat/conversations/{id}/responses (follow-ups) with a clean JSON
+  # body: the user text at `message`. The streamed reply is newline-delimited JSON
+  # ({"result":{...}} per line, NOT data:-prefixed SSE) whose answer is the join of
+  # the `final`-tagged `token` frames — reconstructed by parse_grok_sse in sse.py.
+  # The request only carries `modeId: "auto"`, so the selected model name
+  # ("grok-4-auto") is recovered from the response by parse_grok_model. The
+  # /rest/suggestions/stream, /monitoring, /api/log_metric etc. calls are noise.
+  - name: grok
+    hosts:
+      - grok.com
+    ignore_paths:
+      - "/rest/suggestions/"   # autocomplete suggestion stream (telemetry/UI noise)
+      - "/api/log_metric"
+      - "/monitoring"
+      - "/_data/v1/events"
+      - "/cdn-cgi/"
+    endpoints:
+      # `contains` matches both the first turn (/conversations/new) and follow-ups
+      # (/conversations/{id}/responses); no other captured path contains this.
+      - path: "/rest/app-chat/conversations/"
+        match: contains
+        prompt_path: "message"
+    response: sse
+    sse_handler: grok
+
+  # --- The provider below is a scaffold: paths/prompt fields are best-guess
+  # --- placeholders to be refined once real traffic is captured. Its SSE
+  # --- handler is a stub (see detector/sse.py).
+
+  - name: openai_api
+    hosts:
+      - api.openai.com
+    ignore_paths: []
+    endpoints:
+      - path: "/v1/chat/completions"
+        match: exact
+        prompt_path: "messages[-1].content"         # placeholder
+        model_path: "model"
+    response: sse
+    sse_handler: openai
