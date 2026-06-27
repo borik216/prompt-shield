@@ -8,6 +8,7 @@ Two mitmproxy addons are implemented:
 
 - **Recorder** (`recorder/addon.py`) — blunt capture of all non-GET POST traffic to `recorded.json` as NDJSON; useful for capturing raw traffic to study a new provider.
 - **Detector** (`detector/addon.py`) — the main addon. Classifies flows by AI provider, extracts the user prompt + model from the request, reconstructs the streamed (SSE) response, and writes one clean JSONL record per conversation turn to `detected.jsonl`.
+- **DLP** (`dlp/`) — a config-driven Data Loss Prevention layer the detector calls on every outgoing prompt. Scans for sensitive content (`regex`, `keywords`, and NLP-backed `presidio` PII detection) and either logs the hit or blocks the request (returning a branded HTML page). Hits are recorded in the `dlp` field of each `detected.jsonl` record.
 
 ChatGPT, Claude, Gemini, Perplexity, and Grok are fully implemented and tested against real captures (kept in `tests/fixtures/`, gitignored — see *Data files*). OpenAI API is scaffolded (config entry + SSE handler stub) and ready to fill once its traffic is captured.
 
@@ -50,6 +51,17 @@ The primary addon. Classification and extraction is config-driven; SSE reconstru
   ```json
   {"timestamp": ..., "provider": "chatgpt", "model": "gpt-5-5", "prompt": "hello!", "response": "Hey! ..."}
   ```
+
+### DLP (`dlp/`)
+A defensive, config-driven scan run on every prompt before it leaves. The detector calls `check_prompt(prompt)` in `request()`; a `blocked` result short-circuits the flow with a 403.
+
+- **`config.yaml`** — `default_action` plus a list of `rules`. Each rule has a `type` (`regex` | `keywords` | `presidio`) and an `action` (`block` | `log_only`). regex rules carry a `pattern`, keyword rules a `keywords` list, presidio rules an optional `entities` list + `threshold`.
+- **`engine.py`** — loads rules once (`DLPEngine`, singleton via `get_engine()`). `check(text)` dispatches each rule through `_scan_rule()` and returns `{"action", "blocked", "matches": [...]}`. **Defensive throughout**: bad rules are skipped at load with a warning; any scan error fails *open* (returns "allow") so the proxy never crashes. `_redact()` masks matched secrets so raw values never hit logs.
+- **`presidio_backend.py`** — lazy, fail-open wrapper over Microsoft Presidio (`presidio-analyzer` + `presidio-anonymizer`). Built only when a `presidio` rule exists; if Presidio or its spaCy model isn't installed it logs once and returns no matches. Detected PII is redacted to `<ENTITY>` placeholders by the anonymizer. Model name overridable via `DLP_PRESIDIO_MODEL` (default `en_core_web_lg`).
+- **`blocked_page.py` / `blocked_page.html`** — render the dark-theme "Request Blocked" HTML page returned on a block (names the provider + detected data type). NB: chat apps fetch over XHR, so the page renders on direct navigation / in tools, not inside the chat UI.
+- **`local_llm_backend.py`** — scaffold only (no-op `analyze()`); the reserved extension point for a future `local_llm` rule type. The single place to wire it in is the commented branch in `engine._scan_rule()`.
+
+To add a rule, edit `dlp/config.yaml` (no code needed for regex/keywords/presidio). To add a new *detection backend*, add the type to `_TYPES`, parse its fields in `_build_rule`, and add a branch in `_scan_rule` (see the `local_llm` scaffold). Each `detected.jsonl` record gains a `dlp` field: `null` when clean, else `{"action", "matches": [{"rule", "type", "action", "snippet", "entity"?}]}`.
 
 ### Data files
 - **`tests/fixtures/*.json`** — real recorder captures (ChatGPT, Claude, Gemini, Perplexity, Grok) replayed by the offline test harness. **Gitignored / local-only**: they contain session tokens and personal data, so they're never committed — regenerate your own with the recorder (see `tests/fixtures/README.md`). Request and response are separate lines (recorder limitation); the live detector has the full `HTTPFlow` so they're always paired.

@@ -1,0 +1,101 @@
+<!doctype html>
+<!--
+  Blocked-request page served (403) when a DLP rule with action=block fires.
+  Self-contained: inline styles, no external assets, so it renders offline / inside a
+  proxied response. Tokens are substituted by dlp/blocked_page.py (plain str.replace,
+  so the CSS braces below need no escaping):
+    %%PROVIDER%%     human destination name (ChatGPT, Claude, …)
+    %%DATA_TYPES%%   what was detected (rule names / PII entity types, or "sensitive information")
+    %%MESSAGE%%      the policy message shown to the user
+-->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Request Blocked</title>
+  <style>
+    :root {
+      --bg: #0d1117;
+      --card: #161b22;
+      --border: #30363d;
+      --text: #e6edf3;
+      --muted: #8b949e;
+      --accent: #f85149;
+      --chip: #21262d;
+    }
+    * { box-sizing: border-box; }
+    html, body { height: 100%; margin: 0; }
+    body {
+      background: radial-gradient(1200px 600px at 50% -10%, #1b2230 0%, var(--bg) 60%);
+      color: var(--text);
+      font: 16px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+    .card {
+      width: 100%;
+      max-width: 520px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 40px 36px;
+      box-shadow: 0 16px 48px rgba(0, 0, 0, 0.45);
+    }
+    .badge {
+      width: 56px; height: 56px;
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      background: rgba(248, 81, 73, 0.12);
+      border: 1px solid rgba(248, 81, 73, 0.35);
+      margin-bottom: 22px;
+    }
+    .badge svg { width: 28px; height: 28px; stroke: var(--accent); }
+    h1 { margin: 0 0 8px; font-size: 24px; font-weight: 650; letter-spacing: -0.01em; }
+    p.lead { margin: 0 0 26px; color: var(--muted); }
+    .row {
+      display: flex; align-items: center; gap: 10px;
+      padding: 12px 0;
+      border-top: 1px solid var(--border);
+    }
+    .row .label { color: var(--muted); font-size: 13px; min-width: 84px; text-transform: uppercase; letter-spacing: 0.04em; }
+    .row .value { font-weight: 600; }
+    .chip {
+      display: inline-block;
+      background: var(--chip);
+      border: 1px solid var(--border);
+      color: var(--text);
+      border-radius: 999px;
+      padding: 3px 11px;
+      font-size: 13px;
+      font-weight: 600;
+    }
+    .chip.danger { color: var(--accent); border-color: rgba(248, 81, 73, 0.4); background: rgba(248, 81, 73, 0.08); }
+    footer { margin-top: 28px; font-size: 12.5px; color: var(--muted); }
+  </style>
+</head>
+<body>
+  <main class="card" role="alert">
+    <div class="badge" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="3" y="11" width="18" height="11" rx="2"></rect>
+        <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+      </svg>
+    </div>
+    <h1>Request Blocked</h1>
+    <p class="lead">%%MESSAGE%%</p>
+
+    <div class="row">
+      <span class="label">Going to</span>
+      <span class="value"><span class="chip">%%PROVIDER%%</span></span>
+    </div>
+    <div class="row">
+      <span class="label">Detected</span>
+      <span class="value"><span class="chip danger">%%DATA_TYPES%%</span></span>
+    </div>
+
+    <footer>Blocked by your organization&rsquo;s AI security policy &middot; DLP</footer>
+  </main>
+</body>
+</html>

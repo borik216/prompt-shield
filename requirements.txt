@@ -1,1 +1,10 @@
 mitmproxy
+
+# DLP: Microsoft Presidio for NLP-backed PII detection (optional — the proxy runs
+# without it; presidio rules are skipped if these aren't installed).
+presidio-analyzer
+presidio-anonymizer
+# Presidio also needs a spaCy model (one-time download):
+#   .venv/bin/python -m spacy download en_core_web_lg   (large, recommended)
+#   .venv/bin/python -m spacy download en_core_web_sm   (small, lighter install)
+# Override the model the engine loads with the DLP_PRESIDIO_MODEL env var.

@@ -1,0 +1,84 @@
+# DLP rules for prompt scanning.
+#
+# default_action  applied to any rule that doesn't set its own `action`.
+#                 one of: block | log_only
+#
+# Each rule has:
+#   name    human-readable id (shown in logs / result dicts)
+#   type    regex | keywords | presidio
+#   action  block | log_only        (optional; falls back to default_action)
+#   pattern  (regex rules)    a Python regular expression
+#   keywords (keyword rules)  list of case-insensitive substrings to match
+#   entities (presidio rules) list of Presidio PII entity types to detect
+#                             (optional; omit for a sensible default set)
+#   threshold (presidio rules) min confidence 0..1 (optional, default 0.5)
+#
+# FUTURE: a `local_llm` type is reserved for classifying prompts with a locally-hosted
+# model — scaffolded in dlp/local_llm_backend.py, not yet active.
+
+default_action: log_only
+
+rules:
+  # --- Secrets / credentials: block outright -------------------------------
+  - name: openai_api_key
+    type: regex
+    action: block
+    pattern: 'sk-[A-Za-z0-9]{20,}'
+
+  - name: aws_access_key_id
+    type: regex
+    action: block
+    pattern: 'AKIA[0-9A-Z]{16}'
+
+  - name: private_key_block
+    type: regex
+    action: block
+    pattern: '-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----'
+
+  # --- PII / sensitive content: log only -----------------------------------
+  - name: email_address
+    type: regex
+    action: block
+    pattern: '[\w.+-]+@[\w-]+\.[\w.-]+'
+
+  - name: us_ssn
+    type: regex
+    action: log_only
+    pattern: '\b\d{3}-\d{2}-\d{4}\b'
+
+  - name: sensitive_keywords
+    type: keywords
+    action: log_only
+    keywords:
+      - password
+      - confidential
+      - secret
+      - api_key
+      - ssn
+
+  # --- Presidio: NLP-backed PII detection ----------------------------------
+  # Requires `presidio-analyzer` + `presidio-anonymizer` and a spaCy model
+  # (see requirements.txt). If Presidio isn't installed these rules are silently
+  # skipped — the proxy still runs. Each detected entity is logged with its type
+  # (US_SSN, CREDIT_CARD, …) and a redacted snippet (raw PII never leaves the box).
+
+  # High-risk identifiers -> block.
+  - name: presidio_high_risk
+    type: presidio
+    action: block
+    threshold: 0.5
+    entities:
+      - US_SSN
+      - CREDIT_CARD
+      - IBAN_CODE
+      - US_BANK_NUMBER
+
+  # Contact PII -> log only.
+  - name: presidio_contact_pii
+    type: presidio
+    action: block
+    threshold: 0.5
+    entities:
+      - EMAIL_ADDRESS
+      - PHONE_NUMBER
+      - PERSON
