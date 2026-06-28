@@ -57,12 +57,16 @@ Two mitmproxy addons and a web dashboard:
   study a new provider's wire format before writing detector rules.
 
 - **DLP** (`dlp/`) — config-driven scan on every outgoing prompt. Regex, keyword,
-  and Presidio PII rules can block or log-only. On a block PromptShield answers
-  the request *in the chat itself* — a synthesized assistant turn in the
-  provider's own wire format naming what was detected — so the user sees why
-  right where they typed (providers without a synth handler fall back to a
-  branded HTML page opened in the default browser). Hits are recorded in the
-  `dlp` field of each detection.
+  and Presidio PII rules can block or log-only. On a block PromptShield drops the
+  request locally — it never reaches the provider — and returns a provider-neutral
+  `403` JSON tagged with `X-PromptShield-*` headers. A small overlay script,
+  injected into supported provider pages, reads those headers and shows a branded
+  **in-page PromptShield toast** naming what was detected, right where you typed
+  (no new tab). Hits are recorded in the `dlp` field of each detection. The overlay
+  is config-gated (`overlay.enabled` / `overlay.strip_csp` in `providers.yaml`);
+  disabling it restores the older branded-HTML-page-in-the-browser fallback.
+  Provider-native synthesized assistant turns exist in `sse.py` as experimental,
+  not-yet-wired-in work.
 
 - **Dashboard** (`dashboard/`) — FastAPI + HTMX read-only UI over `detected.jsonl`.
   Live table, sidebar stats, provider/action filters, and a detail modal per record.
@@ -133,6 +137,8 @@ detector/              # main addon: classify → DLP → extract → reconstruc
   config.py            #   loads & validates the rules
   extract.py           #   dotted-path prompt/model extraction + request decoders
   sse.py               #   per-provider streamed-response reconstruction (+ block synth)
+  overlay.py           #   in-page block notification: HTML injection + 403 JSON
+  static/              #   promptshield_overlay.js (the injected toast overlay)
   platform_utils.py    #   WSL/macOS/Linux/Windows: open browser, install CA cert
   addon.py             #   the live mitmproxy addon
 dlp/                   # config-driven prompt scanning (regex / keywords / presidio)

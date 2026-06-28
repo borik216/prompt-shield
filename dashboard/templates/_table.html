@@ -47,7 +47,7 @@
       <td class="whitespace-nowrap px-4 py-3 text-slate-300">{{ row.model }}</td>
       <td class="px-4 py-3">
         <span class="inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold ring-1 ring-inset {{ action_styles[row.action] }}">
-          {% if row.action == "blocked" %}●{% endif %} {{ row.action_label }}
+          {% if row.action == "blocked" %}<span class="inline-block h-1.5 w-1.5 rounded-full bg-current"></span>{% endif %} {{ row.action_label }}
         </span>
       </td>
       <td class="px-4 py-3">

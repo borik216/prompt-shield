@@ -91,6 +91,23 @@ REQUEST_HANDLERS: dict[str, Callable[[str], Tuple[Optional[str], Optional[str]]]
 }
 
 
+def _coerce_prompt(value: Any) -> Optional[str]:
+    """Normalize a resolved prompt to plain text (or ``None``).
+
+    A prompt path may resolve to something other than a string. ChatGPT, for
+    one, puts a *list* of content parts at ``content.parts``, mixing the user's
+    text (``str``) with non-text objects (e.g. ``image_asset_pointer`` dicts for
+    uploads). Keep only the text parts and join them; drop everything else so a
+    stray dict never reaches DLP or lands in the JSONL record as the prompt.
+    """
+    if value is None or isinstance(value, str):
+        return value
+    if isinstance(value, list):
+        texts = [p for p in value if isinstance(p, str) and p.strip()]
+        return "\n".join(texts) if texts else None
+    return None
+
+
 def extract_prompt(rule, request_body_text: Optional[str]):
     """Return ``(prompt, model)`` extracted from the request body, or
     ``(None, None)`` if the body is missing or unparseable.
@@ -110,4 +127,4 @@ def extract_prompt(rule, request_body_text: Optional[str]):
         return None, None
     prompt = resolve_path(body, rule.prompt_path) if rule.prompt_path else None
     model = resolve_path(body, rule.model_path) if rule.model_path else None
-    return prompt, model
+    return _coerce_prompt(prompt), model

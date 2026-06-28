@@ -195,7 +195,7 @@ def record_view(rec: dict[str, Any], idx: int) -> dict[str, Any]:
     key the detail modal is fetched by (``/detail/{idx}``).
     """
     action = derive_action(rec)
-    prompt = rec.get("prompt") or ""
+    prompt = _prompt_text(rec)
     return {
         "idx": idx,
         "timestamp": _format_ts(rec.get("timestamp")),
@@ -218,7 +218,7 @@ def detail_view(rec: dict[str, Any]) -> dict[str, Any]:
         "model": rec.get("model") or "—",
         "action": action,
         "action_label": ACTION_LABELS[action],
-        "prompt": rec.get("prompt") or "",
+        "prompt": _prompt_text(rec),
         "response": rec.get("response"),  # None when blocked
         "dlp_action": dlp.get("action"),
         "matches": dlp.get("matches", []) or [],
@@ -231,6 +231,21 @@ def _format_ts(timestamp: Any) -> str:
         return datetime.fromtimestamp(float(timestamp)).strftime("%Y-%m-%d %H:%M:%S")
     except (TypeError, ValueError, OSError):
         return "—"
+
+
+def _prompt_text(rec: dict[str, Any]) -> str:
+    """The record's prompt as display text, always a ``str``.
+
+    Tolerates legacy/multimodal records whose ``prompt`` is not a plain string:
+    a list of ChatGPT content parts (keep the text ones) or a lone non-text
+    object such as an ``image_asset_pointer`` dict (no prompt text → "").
+    """
+    value = rec.get("prompt")
+    if isinstance(value, str):
+        return value
+    if isinstance(value, list):
+        return "\n".join(p for p in value if isinstance(p, str))
+    return ""  # dict (image upload), None, or anything else → no text
 
 
 def _truncate(text: str, length: int) -> str:

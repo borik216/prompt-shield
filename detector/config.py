@@ -114,3 +114,41 @@ def load_providers(path: str = DEFAULT_CONFIG) -> list[Provider]:
     if not data or "providers" not in data:
         raise ValueError(f"{path} has no top-level 'providers' key")
     return [_build_provider(raw) for raw in data["providers"]]
+
+
+@dataclass
+class OverlayConfig:
+    """Settings for the in-page DLP block notification (see detector/overlay.py).
+
+    enabled    -- inject the overlay + return a JSON block response (vs. the old
+                  HTML-page-in-a-new-tab fallback).
+    strip_csp  -- drop Content-Security-Policy headers on injected pages so the
+                  inline overlay can execute (provider CSPs block inline scripts).
+    inject_hosts -- hosts to inject into; empty means "all configured provider
+                  hosts" (the addon fills the default from the loaded providers).
+    """
+
+    enabled: bool = True
+    strip_csp: bool = True
+    inject_hosts: set[str] = field(default_factory=set)
+
+
+def load_overlay_config(path: str = DEFAULT_CONFIG) -> OverlayConfig:
+    """Read the optional top-level ``overlay:`` mapping from providers.yaml.
+
+    Missing/blank config yields sensible defaults (enabled, strip_csp, inject
+    into all provider hosts). Kept defensive: a malformed section logs and falls
+    back to defaults rather than breaking proxy startup.
+    """
+    yaml = YAML(typ="safe")
+    try:
+        with open(path) as f:
+            data = yaml.load(f) or {}
+        raw = data.get("overlay") or {}
+        return OverlayConfig(
+            enabled=bool(raw.get("enabled", True)),
+            strip_csp=bool(raw.get("strip_csp", True)),
+            inject_hosts=set(raw.get("inject_hosts") or []),
+        )
+    except Exception:
+        return OverlayConfig()

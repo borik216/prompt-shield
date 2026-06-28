@@ -87,6 +87,20 @@ def test_replay():
     assert prompt == "test", repr(prompt)
     assert model == "gpt-5-5", repr(model)
 
+    # Multimodal turn: parts lead with an image_asset_pointer dict. Only the
+    # text part should survive (regression — a raw dict used to land in prompt).
+    img = {"content_type": "image_asset_pointer", "asset_pointer": "sediment://x"}
+    multimodal = json.dumps(
+        {"model": "gpt-5-5", "messages": [{"content": {"parts": [img, "describe this"]}}]}
+    )
+    mm_prompt, _ = extract_prompt(rule, multimodal)
+    assert mm_prompt == "describe this", repr(mm_prompt)
+    image_only = json.dumps(
+        {"model": "gpt-5-5", "messages": [{"content": {"parts": [img]}}]}
+    )
+    io_prompt, _ = extract_prompt(rule, image_only)
+    assert io_prompt is None, repr(io_prompt)
+
     # 3. SSE reconstruction of the assistant turn.
     answer = next((r for r in sse_responses if r), "")
     assert answer.startswith("Hey."), repr(answer)
