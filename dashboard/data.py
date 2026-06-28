@@ -64,7 +64,7 @@ def read_records(path: str = DETECTED_PATH) -> list[dict[str, Any]]:
     """
     records: list[dict[str, Any]] = []
     try:
-        with open(path, "r", encoding="utf-8") as fh:
+        with open(path, "r", encoding="utf-8", errors="replace") as fh:
             for lineno, line in enumerate(fh, start=1):
                 line = line.strip()
                 if not line:

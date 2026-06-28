@@ -363,7 +363,7 @@ def _block_grok(message: str) -> tuple[str, str]:
 
 
 BLOCK_RESPONSE_HANDLERS: dict[str, Callable[[str], tuple[str, str]]] = {
-    "chatgpt": _block_chatgpt,
+    # "chatgpt": _block_chatgpt,  # synth hangs the UI; fall back to browser page
     "claude": _block_claude,
     "gemini": _block_gemini,
     "perplexity": _block_perplexity,

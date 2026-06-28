@@ -30,22 +30,19 @@ from mitmproxy import http  # noqa: E402
 from detector.config import DEFAULT_CONFIG, load_providers  # noqa: E402
 from detector.extract import extract_prompt  # noqa: E402
 from detector.platform_utils import open_path  # noqa: E402
-from detector.sse import reconstruct_model, reconstruct_response, synth_block  # noqa: E402
+from detector.sse import reconstruct_model, reconstruct_response  # noqa: E402
 
 from dlp.engine import check_prompt  # noqa: E402
-from dlp.blocked_page import block_message, render_blocked_page  # noqa: E402
+from dlp.blocked_page import render_blocked_page  # noqa: E402
 
 _dlp_log = _logging.getLogger("dlp")
 _BLOCKED_PAGE_PATH = os.path.join(tempfile.gettempdir(), "promptshield_blocked.html")
 
 
 def _open_blocked_in_browser(html_body: str) -> None:
-    """Cross-platform fallback: write the blocked page to a temp file and open it
-    in the user's default browser (WSL/macOS/Linux/Windows; see platform_utils).
-
-    Used only for providers without an in-chat synth handler — providers that
-    have one show the block inside the chat instead. Fails open: any error is
-    logged but never propagates to the proxy.
+    """Write the blocked page to a temp file and open it in the user's default
+    browser (WSL/macOS/Linux/Windows; see platform_utils). Fails open: any
+    error is logged but never propagates to the proxy.
     """
     try:
         with open(_BLOCKED_PAGE_PATH, "w", encoding="utf-8") as f:
@@ -73,7 +70,7 @@ class LLMDetector:
         self._pending: dict[int, dict] = {}
 
     def _write_record(self, record: dict) -> None:
-        with open(self.output_path, "a") as f:
+        with open(self.output_path, "a", encoding="utf-8") as f:
             f.write(json.dumps(record, ensure_ascii=False) + "\n")
 
     def request(self, flow: http.HTTPFlow) -> None:
@@ -100,26 +97,13 @@ class LLMDetector:
                     "response": None,
                     "dlp": _dlp_summary(dlp_result),
                 })
-                # Prefer showing the block inside the chat (the 403 HTML body is
-                # discarded by the app's XHR). Synthesize a reply in the
-                # provider's own wire format; fall back to the browser page for
-                # providers without a synth handler.
-                synth = synth_block(provider.sse_handler, block_message(provider.name, dlp_result))
-                if synth is not None:
-                    body, content_type = synth
-                    flow.response = http.Response.make(
-                        200,
-                        body.encode("utf-8"),
-                        {"Content-Type": content_type},
-                    )
-                else:
-                    html_body = render_blocked_page(provider.name, dlp_result)
-                    _open_blocked_in_browser(html_body)
-                    flow.response = http.Response.make(
-                        403,
-                        html_body.encode("utf-8"),
-                        {"Content-Type": "text/html; charset=utf-8"},
-                    )
+                html_body = render_blocked_page(provider.name, dlp_result)
+                _open_blocked_in_browser(html_body)
+                flow.response = http.Response.make(
+                    403,
+                    html_body.encode("utf-8"),
+                    {"Content-Type": "text/html; charset=utf-8"},
+                )
                 return
 
             self._pending[id(flow)] = {

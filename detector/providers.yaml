@@ -17,12 +17,18 @@ providers:
     ignore_paths:            # substring match -> skip as noise
       - "/ces/"
       - "/backend-api/sentinel/"
+      - "/backend-anon/sentinel/"
       - "/backend-api/aip/connectors/"
       - "/conversation/init"
       - "generate_autocompletions"
     endpoints:
       # Exact match excludes the /f/conversation/prepare keystroke-debounce noise.
       - path: "/backend-api/f/conversation"
+        match: exact
+        prompt_path: "messages[-1].content.parts[0]"
+        model_path: "model"
+      # Anonymous (logged-out) sessions use the same shape on the /backend-anon/ path.
+      - path: "/backend-anon/f/conversation"
         match: exact
         prompt_path: "messages[-1].content.parts[0]"
         model_path: "model"
