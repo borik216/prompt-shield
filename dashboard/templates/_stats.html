@@ -1,0 +1,30 @@
+{#
+  Sidebar stat cards — returned to the HTMX poll on #stats.
+  `stats` is the dict from data.compute_stats() (computed over all records).
+#}
+<div class="space-y-3">
+
+  <!-- Total detections -->
+  <div class="rounded-xl border border-slate-800 bg-slate-900/40 p-4">
+    <p class="text-xs font-medium uppercase tracking-widest text-slate-500">Total detections</p>
+    <p class="mt-1 text-3xl font-semibold tabular-nums text-white">{{ stats.total }}</p>
+  </div>
+
+  <!-- Blocks today (red accent) -->
+  <div class="rounded-xl border border-accent-600/30 bg-accent-600/5 p-4">
+    <p class="text-xs font-medium uppercase tracking-widest text-accent-500/80">Blocks today</p>
+    <p class="mt-1 text-3xl font-semibold tabular-nums text-accent-500">{{ stats.blocks_today }}</p>
+  </div>
+
+  <!-- Most common provider -->
+  <div class="rounded-xl border border-slate-800 bg-slate-900/40 p-4">
+    <p class="text-xs font-medium uppercase tracking-widest text-slate-500">Top provider</p>
+    {% if stats.top_provider %}
+    <p class="mt-1 text-2xl font-semibold capitalize text-white">{{ stats.top_provider }}</p>
+    <p class="text-xs text-slate-500">{{ stats.by_provider[stats.top_provider] }} detection(s)</p>
+    {% else %}
+    <p class="mt-1 text-2xl font-semibold text-slate-600">—</p>
+    {% endif %}
+  </div>
+
+</div>

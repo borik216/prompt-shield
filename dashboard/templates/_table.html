@@ -1,0 +1,85 @@
+{#
+  Table rows fragment — returned to the HTMX poll on #table.
+  `rows` is a list of record_view() dicts (see dashboard/data.py).
+
+  Per-provider badge tints and per-action pill styles are defined once here so
+  the colour vocabulary lives in one place.
+#}
+{% set provider_styles = {
+  "chatgpt":    "bg-emerald-500/10 text-emerald-300 ring-emerald-500/30",
+  "claude":     "bg-orange-500/10 text-orange-300 ring-orange-500/30",
+  "gemini":     "bg-sky-500/10 text-sky-300 ring-sky-500/30",
+  "perplexity": "bg-teal-500/10 text-teal-300 ring-teal-500/30",
+  "grok":       "bg-slate-400/10 text-slate-200 ring-slate-400/30",
+  "openai_api": "bg-emerald-500/10 text-emerald-300 ring-emerald-500/30"
+} %}
+{% set action_styles = {
+  "blocked": "bg-accent-600/15 text-accent-500 ring-accent-600/40",
+  "flagged": "bg-amber-500/15 text-amber-300 ring-amber-500/40",
+  "allowed": "bg-emerald-500/15 text-emerald-300 ring-emerald-500/40"
+} %}
+
+{% if rows %}
+<table class="w-full text-left text-sm">
+  <thead class="border-b border-slate-800 bg-slate-900/60 text-xs uppercase tracking-wider text-slate-500">
+    <tr>
+      <th class="px-4 py-3 font-medium">Timestamp</th>
+      <th class="px-4 py-3 font-medium">Provider</th>
+      <th class="px-4 py-3 font-medium">Model</th>
+      <th class="px-4 py-3 font-medium">Action</th>
+      <th class="px-4 py-3 font-medium">Rule(s)</th>
+      <th class="px-4 py-3 font-medium">Prompt</th>
+    </tr>
+  </thead>
+  <tbody class="divide-y divide-slate-800/70">
+    {% for row in rows %}
+    <tr
+      class="cursor-pointer transition hover:bg-slate-800/40"
+      hx-get="/detail/{{ row.idx }}"
+      hx-target="#modal"
+      hx-swap="innerHTML">
+      <td class="whitespace-nowrap px-4 py-3 font-mono text-xs text-slate-400">{{ row.timestamp }}</td>
+      <td class="px-4 py-3">
+        <span class="inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium ring-1 ring-inset {{ provider_styles.get(row.provider, 'bg-slate-500/10 text-slate-300 ring-slate-500/30') }}">
+          {{ row.provider }}
+        </span>
+      </td>
+      <td class="whitespace-nowrap px-4 py-3 text-slate-300">{{ row.model }}</td>
+      <td class="px-4 py-3">
+        <span class="inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold ring-1 ring-inset {{ action_styles[row.action] }}">
+          {% if row.action == "blocked" %}●{% endif %} {{ row.action_label }}
+        </span>
+      </td>
+      <td class="px-4 py-3">
+        {% if row.rules %}
+          <div class="flex flex-wrap gap-1">
+            {% for rule in row.rules %}
+            <span class="rounded bg-slate-800 px-1.5 py-0.5 font-mono text-[11px] text-slate-300">{{ rule }}</span>
+            {% endfor %}
+          </div>
+        {% else %}
+          <span class="text-slate-600">—</span>
+        {% endif %}
+      </td>
+      <td class="max-w-md px-4 py-3 text-slate-400">
+        <span class="line-clamp-1">{{ row.snippet or "—" }}</span>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+{# Empty state — no detections (or none match the active filters). #}
+<div class="flex flex-col items-center justify-center gap-3 px-6 py-20 text-center">
+  <span class="grid h-12 w-12 place-items-center rounded-full bg-slate-800/60">
+    <svg class="h-6 w-6 text-slate-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <path d="M12 3l7 3v5c0 4.5-3 8-7 10-4-2-7-5.5-7-10V6l7-3z" stroke-linejoin="round"/>
+    </svg>
+  </span>
+  <p class="text-sm font-medium text-slate-300">No detections yet</p>
+  <p class="max-w-xs text-xs text-slate-500">
+    Detections appear here as soon as PromptShield records traffic. Try clearing the
+    filters, or run the detector addon to start capturing.
+  </p>
+</div>
+{% endif %}

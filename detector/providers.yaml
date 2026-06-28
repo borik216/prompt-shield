@@ -1,4 +1,4 @@
-# Provider detection rules for the LLM Traffic Detector.
+# Provider detection rules for PromptShield.
 #
 # A flow is classified to a provider when:
 #   1. flow.request host matches one of `hosts`, AND

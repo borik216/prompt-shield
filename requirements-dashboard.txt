@@ -1,0 +1,9 @@
+# PromptShield dashboard (FastAPI + HTMX) — kept separate from the proxy's
+# requirements.txt so the mitmproxy addon stays a minimal install.
+#
+#   .venv/bin/pip install -r requirements-dashboard.txt
+#   .venv/bin/uvicorn dashboard.main:app --reload --port 8000
+#
+fastapi
+uvicorn[standard]
+jinja2

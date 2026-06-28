@@ -1,6 +1,7 @@
-"""mitmproxy addon: classify live flows by AI provider, extract the prompt +
-model from the request, reconstruct the streamed response, and append one clean
-JSONL record per conversation turn to ``detected.jsonl``.
+"""PromptShield mitmproxy addon: classify live flows by AI provider, scan
+outgoing prompts through DLP, extract the prompt + model from the request,
+reconstruct the streamed response, and append one clean JSONL record per
+conversation turn to ``detected.jsonl``.
 
 Run with:
     .venv/bin/mitmdump -s detector/addon.py

@@ -2,17 +2,21 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+**PromptShield** (`github.com/borik216/prompt-shield`) — a mitmproxy-based tool that
+detects hosted LLM traffic, scans outgoing prompts with DLP, and records clean
+JSONL per conversation turn. The local checkout directory may still be named
+`llm-traffic-detector`; the product name is PromptShield everywhere in docs and UI.
+
 ## Project state
 
-Two mitmproxy addons are implemented:
+Three main components are implemented:
 
 - **Recorder** (`recorder/addon.py`) — blunt capture of all non-GET POST traffic to `recorded.json` as NDJSON; useful for capturing raw traffic to study a new provider.
 - **Detector** (`detector/addon.py`) — the main addon. Classifies flows by AI provider, extracts the user prompt + model from the request, reconstructs the streamed (SSE) response, and writes one clean JSONL record per conversation turn to `detected.jsonl`.
 - **DLP** (`dlp/`) — a config-driven Data Loss Prevention layer the detector calls on every outgoing prompt. Scans for sensitive content (`regex`, `keywords`, and NLP-backed `presidio` PII detection) and either logs the hit or blocks the request (returning a branded HTML page). Hits are recorded in the `dlp` field of each `detected.jsonl` record.
+- **Dashboard** (`dashboard/`) — FastAPI + HTMX read-only UI over `detected.jsonl`. Live table, stats, filters, detail modal. Run with `uvicorn dashboard.main:app` (see `requirements-dashboard.txt`).
 
 ChatGPT, Claude, Gemini, Perplexity, and Grok are fully implemented and tested against real captures (kept in `tests/fixtures/`, gitignored — see *Data files*). OpenAI API is scaffolded (config entry + SSE handler stub) and ready to fill once its traffic is captured.
-
-Flask is installed in the `.venv` but no web UI exists yet — planned future work over `detected.jsonl`.
 
 ## Setup & commands
 
@@ -31,6 +35,10 @@ The repo ships a `.venv` (gitignored). Use it directly rather than the system in
 
 # Run the offline test harness (no test framework required)
 .venv/bin/python tests/test_detector.py
+
+# Run the dashboard (reads detected.jsonl from repo root)
+.venv/bin/pip install -r requirements-dashboard.txt
+.venv/bin/uvicorn dashboard.main:app --reload --port 8000
 ```
 
 To capture browser traffic, point the browser/system proxy at mitmproxy (default `localhost:8080`) and install the mitmproxy CA cert so HTTPS can be decrypted.

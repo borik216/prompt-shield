@@ -4,9 +4,8 @@ Each provider streams its answer in a different shape, so reconstruction lives
 in code (a small handler per provider) rather than in the YAML config. A handler
 takes the raw response body text and returns the assistant's reconstructed text.
 
-Only the ChatGPT handler is implemented against real captured data. The others
-are stubs with a sketch of their format, to be filled once their traffic is
-captured.
+ChatGPT, Claude, Gemini, Perplexity, and Grok are implemented against real
+captures. OpenAI API is a stub pending a real traffic sample.
 """
 from __future__ import annotations
 

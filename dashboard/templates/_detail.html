@@ -1,0 +1,87 @@
+{#
+  Detail modal — returned into #modal when a table row is clicked.
+  `rec` is the dict from data.detail_view(). The modal closes by swapping #modal
+  back to empty (clicking the backdrop or the ✕ button).
+#}
+{% set action_styles = {
+  "blocked": "bg-accent-600/15 text-accent-500 ring-accent-600/40",
+  "flagged": "bg-amber-500/15 text-amber-300 ring-amber-500/40",
+  "allowed": "bg-emerald-500/15 text-emerald-300 ring-emerald-500/40"
+} %}
+
+<div class="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto p-4 sm:p-8">
+  <!-- Backdrop: click to dismiss (swaps the modal mount point back to empty). -->
+  <div class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm"
+       hx-get="/detail/-1" hx-target="#modal" hx-swap="innerHTML"></div>
+
+  <!-- Panel -->
+  <div class="relative z-10 mt-4 w-full max-w-3xl rounded-2xl border border-slate-800 bg-slate-900 shadow-2xl">
+    <!-- Header -->
+    <div class="flex items-start justify-between gap-4 border-b border-slate-800 px-6 py-4">
+      <div class="flex flex-wrap items-center gap-2">
+        <span class="inline-flex items-center rounded-md bg-slate-800 px-2 py-0.5 text-xs font-medium capitalize text-slate-200">
+          {{ rec.provider }}
+        </span>
+        <span class="text-sm text-slate-400">{{ rec.model }}</span>
+        <span class="inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold ring-1 ring-inset {{ action_styles[rec.action] }}">
+          {% if rec.action == "blocked" %}●{% endif %} {{ rec.action_label }}
+        </span>
+        <span class="font-mono text-xs text-slate-500">{{ rec.timestamp }}</span>
+      </div>
+      <button class="rounded-lg p-1 text-slate-400 hover:bg-slate-800 hover:text-white"
+              hx-get="/detail/-1" hx-target="#modal" hx-swap="innerHTML" aria-label="Close">
+        <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M6 6l12 12M18 6L6 18" stroke-linecap="round"/>
+        </svg>
+      </button>
+    </div>
+
+    <!-- Body -->
+    <div class="max-h-[70vh] space-y-5 overflow-y-auto px-6 py-5">
+
+      <!-- Prompt -->
+      <section>
+        <h3 class="mb-2 text-xs font-semibold uppercase tracking-widest text-slate-500">Prompt</h3>
+        <pre class="whitespace-pre-wrap break-words rounded-lg border border-slate-800 bg-slate-950 p-3 font-mono text-sm text-slate-200">{{ rec.prompt or "—" }}</pre>
+      </section>
+
+      <!-- Response -->
+      <section>
+        <h3 class="mb-2 text-xs font-semibold uppercase tracking-widest text-slate-500">Response</h3>
+        {% if rec.response %}
+        <pre class="whitespace-pre-wrap break-words rounded-lg border border-slate-800 bg-slate-950 p-3 font-mono text-sm text-slate-200">{{ rec.response }}</pre>
+        {% else %}
+        <div class="rounded-lg border border-accent-600/30 bg-accent-600/5 p-3 text-sm text-accent-500/90">
+          Blocked before reaching the provider — no response was returned.
+        </div>
+        {% endif %}
+      </section>
+
+      <!-- DLP matches -->
+      {% if rec.matches %}
+      <section>
+        <h3 class="mb-2 text-xs font-semibold uppercase tracking-widest text-slate-500">
+          DLP matches
+          <span class="ml-1 rounded bg-slate-800 px-1.5 py-0.5 text-[11px] font-normal text-slate-400">{{ rec.dlp_action }}</span>
+        </h3>
+        <div class="space-y-2">
+          {% for m in rec.matches %}
+          <div class="flex flex-wrap items-center gap-2 rounded-lg border border-slate-800 bg-slate-950 px-3 py-2 text-sm">
+            <span class="font-mono text-slate-200">{{ m.rule }}</span>
+            <span class="rounded bg-slate-800 px-1.5 py-0.5 text-[11px] text-slate-400">{{ m.type }}</span>
+            {% if m.entity %}
+            <span class="rounded bg-sky-500/10 px-1.5 py-0.5 text-[11px] text-sky-300">{{ m.entity }}</span>
+            {% endif %}
+            <span class="rounded px-1.5 py-0.5 text-[11px] font-semibold ring-1 ring-inset {{ action_styles['blocked'] if m.action == 'block' else action_styles['flagged'] }}">
+              {{ m.action }}
+            </span>
+            <span class="ml-auto font-mono text-xs text-slate-500">{{ m.snippet }}</span>
+          </div>
+          {% endfor %}
+        </div>
+      </section>
+      {% endif %}
+
+    </div>
+  </div>
+</div>
