@@ -15,8 +15,8 @@ from __future__ import annotations
 import json
 import logging as _logging
 import os
-import subprocess
 import sys
+import tempfile
 
 # mitmproxy loads this file as a top-level script, so the `detector` package
 # isn't importable by default. Put the repo root on sys.path and import the
@@ -29,37 +29,31 @@ from mitmproxy import http  # noqa: E402
 
 from detector.config import DEFAULT_CONFIG, load_providers  # noqa: E402
 from detector.extract import extract_prompt  # noqa: E402
-from detector.sse import reconstruct_model, reconstruct_response  # noqa: E402
+from detector.platform_utils import open_path  # noqa: E402
+from detector.sse import reconstruct_model, reconstruct_response, synth_block  # noqa: E402
 
 from dlp.engine import check_prompt  # noqa: E402
-from dlp.blocked_page import render_blocked_page  # noqa: E402
+from dlp.blocked_page import block_message, render_blocked_page  # noqa: E402
 
 _dlp_log = _logging.getLogger("dlp")
-_BLOCKED_PAGE_PATH = "/tmp/dlp_blocked.html"
+_BLOCKED_PAGE_PATH = os.path.join(tempfile.gettempdir(), "promptshield_blocked.html")
 
 
 def _open_blocked_in_browser(html_body: str) -> None:
-    """Write the blocked page to a temp file and open it in the Windows browser.
+    """Cross-platform fallback: write the blocked page to a temp file and open it
+    in the user's default browser (WSL/macOS/Linux/Windows; see platform_utils).
 
-    Uses WSL2 interop: wslpath converts the Linux path to a Windows UNC path
-    (\\\\wsl.localhost\\<distro>\\tmp\\dlp_blocked.html), then cmd.exe start
-    opens it in the Windows default browser.  Fails open — any error is logged
-    but never propagates to the proxy.
+    Used only for providers without an in-chat synth handler — providers that
+    have one show the block inside the chat instead. Fails open: any error is
+    logged but never propagates to the proxy.
     """
     try:
         with open(_BLOCKED_PAGE_PATH, "w", encoding="utf-8") as f:
             f.write(html_body)
-        win_path = subprocess.check_output(
-            ["wslpath", "-w", _BLOCKED_PAGE_PATH],
-            stderr=subprocess.DEVNULL,
-        ).decode().strip()
-        subprocess.Popen(
-            ["cmd.exe", "/c", "start", "", win_path],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
     except Exception as exc:
-        _dlp_log.warning("dlp: could not open blocked page in browser: %s", exc)
+        _dlp_log.warning("dlp: could not write blocked page: %s", exc)
+        return
+    open_path(_BLOCKED_PAGE_PATH)
 
 
 def _dlp_summary(dlp_result: dict):
@@ -106,13 +100,26 @@ class LLMDetector:
                     "response": None,
                     "dlp": _dlp_summary(dlp_result),
                 })
-                html_body = render_blocked_page(provider.name, dlp_result)
-                _open_blocked_in_browser(html_body)
-                flow.response = http.Response.make(
-                    403,
-                    html_body.encode("utf-8"),
-                    {"Content-Type": "text/html; charset=utf-8"},
-                )
+                # Prefer showing the block inside the chat (the 403 HTML body is
+                # discarded by the app's XHR). Synthesize a reply in the
+                # provider's own wire format; fall back to the browser page for
+                # providers without a synth handler.
+                synth = synth_block(provider.sse_handler, block_message(provider.name, dlp_result))
+                if synth is not None:
+                    body, content_type = synth
+                    flow.response = http.Response.make(
+                        200,
+                        body.encode("utf-8"),
+                        {"Content-Type": content_type},
+                    )
+                else:
+                    html_body = render_blocked_page(provider.name, dlp_result)
+                    _open_blocked_in_browser(html_body)
+                    flow.response = http.Response.make(
+                        403,
+                        html_body.encode("utf-8"),
+                        {"Content-Type": "text/html; charset=utf-8"},
+                    )
                 return
 
             self._pending[id(flow)] = {

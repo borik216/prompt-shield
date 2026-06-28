@@ -57,8 +57,12 @@ Two mitmproxy addons and a web dashboard:
   study a new provider's wire format before writing detector rules.
 
 - **DLP** (`dlp/`) — config-driven scan on every outgoing prompt. Regex, keyword,
-  and Presidio PII rules can block (403 + branded HTML page) or log-only. Hits are
-  recorded in the `dlp` field of each detection.
+  and Presidio PII rules can block or log-only. On a block PromptShield answers
+  the request *in the chat itself* — a synthesized assistant turn in the
+  provider's own wire format naming what was detected — so the user sees why
+  right where they typed (providers without a synth handler fall back to a
+  branded HTML page opened in the default browser). Hits are recorded in the
+  `dlp` field of each detection.
 
 - **Dashboard** (`dashboard/`) — FastAPI + HTMX read-only UI over `detected.jsonl`.
   Live table, sidebar stats, provider/action filters, and a detail modal per record.
@@ -67,25 +71,40 @@ Two mitmproxy addons and a web dashboard:
 
 ```bash
 python3 -m venv .venv
-.venv/bin/pip install -r requirements.txt      # mitmproxy + optional Presidio
-
-# Run the detector (writes detected.jsonl)
-.venv/bin/mitmdump -s detector/addon.py
-# .venv/bin/mitmweb  -s detector/addon.py       # same, with the browser UI
-# .venv/bin/mitmdump -s recorder/addon.py       # raw recorder → recorded.json
+.venv/bin/pip install -e .            # installs the `promptshield` command
+.venv/bin/promptshield setup          # mint + install the CA cert, print proxy steps
+.venv/bin/promptshield run            # start the detector proxy (writes detected.jsonl)
 ```
 
-Point your browser or system proxy at mitmproxy (default `localhost:8080`) and install
-the mitmproxy CA certificate so HTTPS can be decrypted.
+`promptshield setup` is the onboarding doctor: it mints the mitmproxy CA cert,
+best-effort installs it into your OS trust store (macOS/Linux/Windows/WSL), and
+prints the proxy-configuration steps for your platform. Any privileged step that
+can't complete falls back to clear manual instructions — and you can always
+install the cert from `http://mitm.it` while the proxy runs.
 
-Detector environment overrides: `DETECTOR_CONFIG` (path to `providers.yaml`),
-`DETECTOR_OUTPUT` (output path, default `detected.jsonl`).
+The one CLI replaces the raw `mitmdump`/`uvicorn` invocations:
+
+```bash
+promptshield run          # detector proxy → detected.jsonl
+promptshield record       # raw recorder  → recorded.json
+promptshield dashboard    # FastAPI dashboard
+promptshield cert         # (re)mint + install the CA cert
+promptshield setup        # full onboarding doctor
+```
+
+`promptshield run` passes any extra args through to `mitmdump` (e.g.
+`promptshield run -p 8081`). Detector environment overrides still apply:
+`DETECTOR_CONFIG` (path to `providers.yaml`), `DETECTOR_OUTPUT` (output path,
+default `detected.jsonl`).
+
+> Prefer the raw addons? They still work directly:
+> `.venv/bin/mitmdump -s detector/addon.py` (add `pip install -r requirements.txt`
+> for just the proxy; `requirements-dashboard.txt` for the dashboard).
 
 ### Dashboard
 
 ```bash
-.venv/bin/pip install -r requirements-dashboard.txt
-.venv/bin/uvicorn dashboard.main:app --reload --port 8000
+promptshield dashboard --port 8000
 # → http://localhost:8000
 ```
 
@@ -108,11 +127,13 @@ tokens, personal data) stay in gitignored `tests/fixtures/local/` — see
 ## Project structure
 
 ```
+cli.py                 # `promptshield` entry point (run/record/dashboard/cert/setup)
 detector/              # main addon: classify → DLP → extract → reconstruct → JSONL
   providers.yaml       #   per-provider host/endpoint/prompt/model rules
   config.py            #   loads & validates the rules
   extract.py           #   dotted-path prompt/model extraction + request decoders
-  sse.py               #   per-provider streamed-response reconstruction
+  sse.py               #   per-provider streamed-response reconstruction (+ block synth)
+  platform_utils.py    #   WSL/macOS/Linux/Windows: open browser, install CA cert
   addon.py             #   the live mitmproxy addon
 dlp/                   # config-driven prompt scanning (regex / keywords / presidio)
 recorder/addon.py      # blunt NDJSON capture for studying a new provider

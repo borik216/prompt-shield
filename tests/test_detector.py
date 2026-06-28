@@ -23,7 +23,12 @@ sys.path.insert(0, _REPO_ROOT)
 
 from detector.config import load_providers
 from detector.extract import extract_prompt
-from detector.sse import reconstruct_model, reconstruct_response
+from detector.sse import (
+    BLOCK_RESPONSE_HANDLERS,
+    reconstruct_model,
+    reconstruct_response,
+    synth_block,
+)
 
 SAMPLE = os.path.join(_FIXTURES, "chatgpt.json")
 CLAUDE_SAMPLE = os.path.join(_FIXTURES, "claude.json")
@@ -299,6 +304,28 @@ def test_grok_replay():
     print("OK: response =", repr(answer[:80]) + " ...")
 
 
+def test_block_synth_roundtrip():
+    """Every DLP-block synth stream must reconstruct back to the block text.
+
+    This keeps each synth handler self-consistent with its parse_* inverse: if
+    our own parser reads the message back, the synth output is a structurally
+    valid stream in that provider's format (the real frontend's prerequisite).
+    """
+    message = "\U0001F6E1️ PromptShield blocked this prompt — detected: US_SSN."
+    for handler in BLOCK_RESPONSE_HANDLERS:
+        result = synth_block(handler, message)
+        assert result is not None, handler
+        body, content_type = result
+        assert content_type in ("text/event-stream", "application/json"), (handler, content_type)
+        recovered = reconstruct_response(handler, body)
+        assert recovered == message, (handler, repr(recovered))
+        print(f"OK: {handler} block synth round-trips ({content_type})")
+
+    # Providers without a synth handler (e.g. the openai stub) return None so the
+    # addon falls back to the browser page.
+    assert synth_block("openai", message) is None
+
+
 if __name__ == "__main__":
     if not glob.glob(os.path.join(_FIXTURES, "*.json")):
         print(f"No capture fixtures found in {_FIXTURES}.", file=sys.stderr)
@@ -319,4 +346,6 @@ if __name__ == "__main__":
     test_perplexity_replay()
     print("\n--- grok ---")
     test_grok_replay()
+    print("\n--- block synth round-trip ---")
+    test_block_synth_roundtrip()
     print("\nAll detector tests passed.")
