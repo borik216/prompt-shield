@@ -33,8 +33,9 @@ The repo ships a `.venv` (gitignored). Use it directly rather than the system in
 .venv/bin/mitmdump -s recorder/addon.py
 # (use .venv/bin/mitmweb for the browser UI, .venv/bin/mitmproxy for the TUI)
 
-# Run the offline test harness (no test framework required)
+# Run the offline test harnesses (no test framework required)
 .venv/bin/python tests/test_detector.py
+.venv/bin/python tests/test_dlp.py
 
 # Run the dashboard (reads detected.jsonl from repo root)
 .venv/bin/pip install -r requirements-dashboard.txt
@@ -72,22 +73,24 @@ A defensive, config-driven scan run on every prompt before it leaves. The detect
 To add a rule, edit `dlp/config.yaml` (no code needed for regex/keywords/presidio). To add a new *detection backend*, add the type to `_TYPES`, parse its fields in `_build_rule`, and add a branch in `_scan_rule` (see the `local_llm` scaffold). Each `detected.jsonl` record gains a `dlp` field: `null` when clean, else `{"action", "matches": [{"rule", "type", "action", "snippet", "entity"?}]}`.
 
 ### Data files
-- **`tests/fixtures/*.json`** — real recorder captures (ChatGPT, Claude, Gemini, Perplexity, Grok) replayed by the offline test harness. **Gitignored / local-only**: they contain session tokens and personal data, so they're never committed — regenerate your own with the recorder (see `tests/fixtures/README.md`). Request and response are separate lines (recorder limitation); the live detector has the full `HTTPFlow` so they're always paired.
+- **`tests/fixtures/*.json`** — committed, sanitized minimal samples replayed by the offline test harness. Full recorder captures go in **`tests/fixtures/local/*.json`** (gitignored; session tokens and personal data). Rebuild committed samples with `tests/build_fixtures.py` — see `tests/fixtures/README.md`. Request and response are separate lines in recorder output (recorder limitation); the live detector has the full `HTTPFlow` so they're always paired.
 - **`detected.jsonl`** — clean detector output, one record per conversation turn (gitignored).
 - **`recorded.json`** — raw recorder output, untracked (empty until the recorder addon runs).
 
 When parsing NDJSON files, always read line-by-line with `json.loads(line)` — never `json.load` the whole file.
 
 ### Tests
-`tests/test_detector.py` is a plain-`assert` script (no test framework) that replays the captures in `tests/fixtures/` through the classifier, extractor, and stream reconstructor — one `test_*_replay()` per provider. For ChatGPT, for example:
+`tests/test_detector.py` replays the committed fixtures through the classifier, extractor, and stream reconstructor — one `test_*_replay()` per provider. `tests/test_dlp.py` smoke-tests regex/keyword DLP rules with fake secrets (no Presidio required in CI). Both run via `.github/workflows/ci.yml` on push/PR.
+
+For ChatGPT, for example:
 - Classifier accepts `/backend-api/f/conversation`, rejects all noise paths.
 - Extracts `prompt="test"`, `model="gpt-5-5"`.
 - SSE reconstruction yields `"Hey. Looks like your test came through—I can see your message. What would you like to do?"`.
 
-If the fixtures are absent (e.g. a fresh clone) the harness prints a hint and exits 0.
+Missing fixtures exit 1 (CI must fail loudly). Committed samples should always be present after clone.
 
 ### Adding a new provider
-1. Capture raw traffic with the recorder; save it into `tests/fixtures/` (gitignored).
+1. Capture raw traffic with the recorder; save it into `tests/fixtures/local/` (gitignored).
 2. Add a `providers.yaml` entry (`hosts`, `ignore_paths`, `endpoints`, `prompt_path`, `model_path`, `sse_handler`).
 3. Implement a handler function in `sse.py` and register it in `HANDLERS`. (If the model only appears in the response, also add a `RESPONSE_MODEL_HANDLERS` extractor; if the request body isn't plain JSON, add a `REQUEST_HANDLERS` decoder in `extract.py`.)
 4. Add a `test_*_replay()` and a `*_SAMPLE` path (under `tests/fixtures/`) to `tests/test_detector.py`.

@@ -6,8 +6,8 @@ __pycache__/
 detected.jsonl
 recorded.json
 
-# Captured traffic — kept local; contains session tokens & personal data
-tests/fixtures/*.json
+# Full recorder captures — kept local; contain session tokens & personal data
+tests/fixtures/local/*.json
 
 # Local agent settings
 .claude/

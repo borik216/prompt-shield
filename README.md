@@ -1,5 +1,7 @@
 # PromptShield
 
+![CI](https://github.com/borik216/prompt-shield/actions/workflows/ci.yml/badge.svg)
+
 Intercept your browser's traffic to hosted LLM assistants, scan outgoing prompts
 for sensitive data, and reconstruct each conversation turn into a clean, structured
 record — **provider, model, prompt, and the fully reassembled streamed response**.
@@ -94,15 +96,14 @@ for endpoints and layout.
 ## Tests
 
 ```bash
-.venv/bin/python tests/test_detector.py
+.venv/bin/python tests/test_detector.py   # classifier + extractor + SSE replay
+.venv/bin/python tests/test_dlp.py        # DLP regex/keyword smoke tests
 ```
 
-The harness replays real captures through the classifier, extractor, and stream
-reconstructor for every provider — no test framework required. The capture fixtures
-are **not committed** (they contain session tokens and personal data); generate your
-own with the recorder into `tests/fixtures/` — see
-[`tests/fixtures/README.md`](tests/fixtures/README.md). The suite skips cleanly with
-a hint when no fixtures are present.
+Both run on every push via GitHub Actions. Sanitized minimal fixtures are committed
+under `tests/fixtures/` and pass on a fresh clone. Full recorder captures (session
+tokens, personal data) stay in gitignored `tests/fixtures/local/` — see
+[`tests/fixtures/README.md`](tests/fixtures/README.md) to regenerate samples.
 
 ## Project structure
 
@@ -118,11 +119,13 @@ recorder/addon.py      # blunt NDJSON capture for studying a new provider
 dashboard/             # FastAPI + HTMX UI over detected.jsonl
 tests/
   test_detector.py     # offline replay harness
-  fixtures/            # capture files (local-only / gitignored)
+  test_dlp.py          # DLP smoke tests (fake secrets)
+  build_fixtures.py    # rebuild committed samples from local/ captures
+  fixtures/            # committed sanitized samples (+ local/ for full captures)
+.github/workflows/ci.yml
 ```
 
 ## Roadmap
 
 - Flesh out the OpenAI API provider; add more assistants as their traffic is captured.
-- Sanitized public fixtures so the test harness passes on a fresh clone.
 - SSE live updates in the dashboard (replace HTMX polling).

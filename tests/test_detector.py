@@ -301,10 +301,13 @@ def test_grok_replay():
 
 if __name__ == "__main__":
     if not glob.glob(os.path.join(_FIXTURES, "*.json")):
-        print(f"No capture fixtures found in {_FIXTURES}.")
-        print("They're gitignored (real captures contain session tokens + personal data).")
-        print("Generate your own with the recorder — see tests/fixtures/README.md.")
-        sys.exit(0)
+        print(f"No capture fixtures found in {_FIXTURES}.", file=sys.stderr)
+        print(
+            "Committed samples should be present after clone. To rebuild from full "
+            "captures, see tests/fixtures/README.md.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
 
     print("--- chatgpt ---")
     test_replay()
