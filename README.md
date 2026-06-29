@@ -2,8 +2,8 @@
 
 **Catch sensitive data before it leaves your browser.** A man-in-the-middle proxy that inspects, scans, and logs your traffic to hosted LLM assistants — ChatGPT, Claude, Gemini, Perplexity, and Grok.
 
-https://github.com/user-attachments/assets/PLACEHOLDER.mp4
-
+[Demonstration
+](https://github.com/user-attachments/assets/0d70ae1a-14f0-4493-8290-4e23fbcde7bc)
 *A fake AWS key triggers PromptShield mid-prompt — blocked before it leaves the browser, logged to the dashboard in real time.*
 
 [![CI](https://github.com/borik216/prompt-shield/actions/workflows/ci.yml/badge.svg)](https://github.com/borik216/prompt-shield/actions/workflows/ci.yml)
