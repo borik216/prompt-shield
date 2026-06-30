@@ -2,9 +2,18 @@
 
 **Catch sensitive data before it leaves your browser.** A man-in-the-middle proxy that inspects, scans, and logs your traffic to hosted LLM assistants — ChatGPT, Claude, Gemini, Perplexity, and Grok.
 
-[Demonstration
-](https://github.com/user-attachments/assets/0d70ae1a-14f0-4493-8290-4e23fbcde7bc)
-*A fake AWS key triggers PromptShield mid-prompt — blocked before it leaves the browser, logged to the dashboard in real time.*
+
+<p align="center">
+  <video
+    src="https://github.com/user-attachments/assets/6898be6d-589e-4770-a2c6-a572d1f34234"
+    controls
+    muted
+    playsinline
+    width="900">
+  </video>
+</p>
+
+### *PromptShield detects an exposed API key, email address, and private key in a prompt, blocks the request before it reaches the LLM, and logs the incident in real time.*
 
 [![CI](https://github.com/borik216/prompt-shield/actions/workflows/ci.yml/badge.svg)](https://github.com/borik216/prompt-shield/actions/workflows/ci.yml)
 ![Python 3.10+](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)
@@ -63,9 +72,7 @@ The main addon. Classification and extraction are config-driven (`providers.yaml
 
 A config-driven scan run on every outgoing prompt before it leaves. Three rule types — `regex`, `keywords`, and Presidio-backed `presidio` PII detection — each set to `block` or `log_only`. On a block, PromptShield drops the request locally (it never reaches the provider) and returns a provider-neutral `403` tagged with `X-PromptShield-*` headers; the injected overlay reads those headers and shows an in-page toast naming *what* was detected — never the matched value, which is redacted everywhere it could be logged. The engine is defensive throughout: bad rules are skipped at load, and any scan error fails *open* so the proxy never takes your traffic down with it.
 
-![PromptShield in-page block toast](https://github.com/user-attachments/assets/DLP_POPUP_PLACEHOLDER)
-
-*Screenshot to capture: a provider chat (e.g. ChatGPT) with the PromptShield toast visible right after a blocked prompt — showing that it names the detected data type, not the secret itself.*
+<img width="358" height="184" alt="PromptShield in-page block toast" src="https://github.com/user-attachments/assets/7c03ff79-e092-43d9-9e1e-c9f867cd6466" />
 
 Adding a rule needs no code: edit [`dlp/config.yaml`](dlp/config.yaml). Adding a new detection backend is one type entry plus one branch in the engine (there's a `local_llm` scaffold marking the spot).
 
@@ -73,9 +80,8 @@ Adding a rule needs no code: edit [`dlp/config.yaml`](dlp/config.yaml). Adding a
 
 A FastAPI + HTMX read-only UI over `detected.jsonl`: live table, sidebar stats, provider/action filters, and a detail modal per record.
 
-![PromptShield dashboard](https://github.com/user-attachments/assets/DASHBOARD_PLACEHOLDER)
+<img width="1556" height="741" alt="PromptShield dashboard" src="https://github.com/user-attachments/assets/5caccb9b-58a6-4b43-8ae1-02734e53ff2b" />
 
-*Screenshot to capture: the dashboard with several detections loaded — the stats sidebar, the provider/action filters, and a detail modal open on one record.*
 
 ### Recorder (`recorder/`)
 
