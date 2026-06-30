@@ -9,6 +9,20 @@
 # (see detector/extract.py for the dotted-path mini-language) and which SSE
 # handler reconstructs the streamed response (see detector/sse.py).
 
+# In-page DLP block notification (see detector/overlay.py). When enabled, a
+# blocked prompt returns a provider-neutral 403 JSON with X-PromptShield-*
+# headers, and a small injected overlay shows an in-page toast (no new tab).
+#   enabled:   inject the overlay + return JSON on block. false restores the old
+#              HTML-page-opened-in-the-browser fallback.
+#   strip_csp: drop Content-Security-Policy headers on injected pages so the
+#              inline overlay can run (provider CSPs otherwise block it). Only
+#              affects your own already-decrypted proxied traffic.
+#   inject_hosts (optional): override which hosts to inject into; omit to use the
+#              union of every provider's `hosts` below.
+overlay:
+  enabled: true
+  strip_csp: true
+
 providers:
   - name: chatgpt
     hosts:
@@ -17,6 +31,7 @@ providers:
     ignore_paths:            # substring match -> skip as noise
       - "/ces/"
       - "/backend-api/sentinel/"
+      - "/backend-anon/sentinel/"
       - "/backend-api/aip/connectors/"
       - "/conversation/init"
       - "generate_autocompletions"
@@ -24,7 +39,16 @@ providers:
       # Exact match excludes the /f/conversation/prepare keystroke-debounce noise.
       - path: "/backend-api/f/conversation"
         match: exact
-        prompt_path: "messages[-1].content.parts[0]"
+        # The whole parts list (not [0]): a multimodal turn leads with an
+        # image_asset_pointer dict; _coerce_prompt keeps only the text part(s).
+        prompt_path: "messages[-1].content.parts"
+        model_path: "model"
+      # Anonymous (logged-out) sessions use the same shape on the /backend-anon/ path.
+      - path: "/backend-anon/f/conversation"
+        match: exact
+        # The whole parts list (not [0]): a multimodal turn leads with an
+        # image_asset_pointer dict; _coerce_prompt keeps only the text part(s).
+        prompt_path: "messages[-1].content.parts"
         model_path: "model"
     response: sse
     sse_handler: chatgpt

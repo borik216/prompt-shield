@@ -2,6 +2,11 @@
 __pycache__/
 *.pyc
 
+# Python packaging artifacts (from `pip install -e .` / builds)
+*.egg-info/
+build/
+dist/
+
 # Detector / recorder output
 detected.jsonl
 recorded.json

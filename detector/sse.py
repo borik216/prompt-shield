@@ -305,6 +305,83 @@ HANDLERS: dict[str, Callable[[str], str]] = {
     "openai": parse_openai_sse,
 }
 
+
+# --- Synthesizing a block message in each provider's wire format --------------
+#
+# When DLP blocks a prompt we'd rather the user see *why* inside the chat than
+# get a thrown-away 403. Each synth function below emits a minimal stream in the
+# provider's own format carrying a single assistant message. They are the inverse
+# of the parse_* handlers above and are kept self-consistent with them: the same
+# parse_* handler reconstructs the synth output back to the message text (covered
+# by tests/test_detector.py), which both guards the format and gives the real
+# web frontend a valid stream to render. Best-effort: a provider without a synth
+# handler falls back to the cross-platform browser page (see addon.py).
+#
+# Each returns (body_text, content_type).
+
+def _block_chatgpt(message: str) -> tuple[str, str]:
+    """ChatGPT delta_encoding v1: one full assistant text message, then [DONE]."""
+    msg = {
+        "message": {
+            "author": {"role": "assistant"},
+            "content": {"content_type": "text", "parts": [message]},
+        }
+    }
+    body = f"data: {json.dumps({'v': msg})}\n\ndata: [DONE]\n\n"
+    return body, "text/event-stream"
+
+
+def _block_claude(message: str) -> tuple[str, str]:
+    """Anthropic SSE: a single content_block_delta / text_delta."""
+    event = {
+        "type": "content_block_delta",
+        "delta": {"type": "text_delta", "text": message},
+    }
+    body = f"event: content_block_delta\ndata: {json.dumps(event)}\n\n"
+    return body, "text/event-stream"
+
+
+def _block_gemini(message: str) -> tuple[str, str]:
+    """Gemini chunked wrb.fr frame with the answer at inner[4][0][1][0]."""
+    inner = [None, None, None, None, [[None, [message]]]]
+    frame = [["wrb.fr", None, json.dumps(inner)]]
+    body = ")]}'\n\n" + json.dumps(frame)
+    return body, "application/json"
+
+
+def _block_perplexity(message: str) -> tuple[str, str]:
+    """Perplexity SSE: one message event with a markdown_block.answer."""
+    event = {"blocks": [{"markdown_block": {"answer": message}}]}
+    body = f"event: message\ndata: {json.dumps(event)}\n\n"
+    return body, "text/event-stream"
+
+
+def _block_grok(message: str) -> tuple[str, str]:
+    """Grok newline-delimited JSON: one final-tagged token line."""
+    line = {"result": {"response": {"token": message, "messageTag": "final"}}}
+    return json.dumps(line) + "\n", "application/json"
+
+
+BLOCK_RESPONSE_HANDLERS: dict[str, Callable[[str], tuple[str, str]]] = {
+    # "chatgpt": _block_chatgpt,  # synth hangs the UI; fall back to browser page
+    "claude": _block_claude,
+    "gemini": _block_gemini,
+    "perplexity": _block_perplexity,
+    "grok": _block_grok,
+}
+
+
+def synth_block(handler: str, message: str) -> Optional[tuple[str, str]]:
+    """Build an in-chat block message for ``handler``.
+
+    Returns ``(body_text, content_type)`` to use as a 200 response, or ``None``
+    when no synth handler is registered (the caller then shows the browser page).
+    """
+    fn = BLOCK_RESPONSE_HANDLERS.get(handler)
+    if fn is None:
+        return None
+    return fn(message)
+
 # Providers that only reveal the model in the response (not the request) register
 # a model extractor here; reconstruct_model() returns None for everyone else, so
 # providers that carry the model in the request are unaffected.

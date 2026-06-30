@@ -15,8 +15,8 @@ from __future__ import annotations
 import json
 import logging as _logging
 import os
-import subprocess
 import sys
+import tempfile
 
 # mitmproxy loads this file as a top-level script, so the `detector` package
 # isn't importable by default. Put the repo root on sys.path and import the
@@ -27,39 +27,36 @@ if _REPO_ROOT not in sys.path:
 
 from mitmproxy import http  # noqa: E402
 
-from detector.config import DEFAULT_CONFIG, load_providers  # noqa: E402
+from detector.config import DEFAULT_CONFIG, load_overlay_config, load_providers  # noqa: E402
 from detector.extract import extract_prompt  # noqa: E402
+from detector.overlay import (  # noqa: E402
+    build_block_response,
+    build_script_tag,
+    inject_overlay,
+    should_inject,
+)
+from detector.platform_utils import open_path  # noqa: E402
 from detector.sse import reconstruct_model, reconstruct_response  # noqa: E402
 
 from dlp.engine import check_prompt  # noqa: E402
 from dlp.blocked_page import render_blocked_page  # noqa: E402
 
 _dlp_log = _logging.getLogger("dlp")
-_BLOCKED_PAGE_PATH = "/tmp/dlp_blocked.html"
+_BLOCKED_PAGE_PATH = os.path.join(tempfile.gettempdir(), "promptshield_blocked.html")
 
 
 def _open_blocked_in_browser(html_body: str) -> None:
-    """Write the blocked page to a temp file and open it in the Windows browser.
-
-    Uses WSL2 interop: wslpath converts the Linux path to a Windows UNC path
-    (\\\\wsl.localhost\\<distro>\\tmp\\dlp_blocked.html), then cmd.exe start
-    opens it in the Windows default browser.  Fails open — any error is logged
-    but never propagates to the proxy.
+    """Write the blocked page to a temp file and open it in the user's default
+    browser (WSL/macOS/Linux/Windows; see platform_utils). Fails open: any
+    error is logged but never propagates to the proxy.
     """
     try:
         with open(_BLOCKED_PAGE_PATH, "w", encoding="utf-8") as f:
             f.write(html_body)
-        win_path = subprocess.check_output(
-            ["wslpath", "-w", _BLOCKED_PAGE_PATH],
-            stderr=subprocess.DEVNULL,
-        ).decode().strip()
-        subprocess.Popen(
-            ["cmd.exe", "/c", "start", "", win_path],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
     except Exception as exc:
-        _dlp_log.warning("dlp: could not open blocked page in browser: %s", exc)
+        _dlp_log.warning("dlp: could not write blocked page: %s", exc)
+        return
+    open_path(_BLOCKED_PAGE_PATH)
 
 
 def _dlp_summary(dlp_result: dict):
@@ -74,13 +71,67 @@ class LLMDetector:
         config_path = os.environ.get("DETECTOR_CONFIG", DEFAULT_CONFIG)
         self.providers = load_providers(config_path)
         self.output_path = os.environ.get("DETECTOR_OUTPUT", "detected.jsonl")
+        # In-page DLP block notification. Default inject_hosts = every provider
+        # web host; the overlay <script> is built once and reused per page load.
+        self.overlay = load_overlay_config(config_path)
+        if not self.overlay.inject_hosts:
+            self.overlay.inject_hosts = {h for p in self.providers for h in p.hosts}
+        self._script_tag = build_script_tag()
         # Per-flow scratch keyed by id(flow); populated in request(), read in
         # response(). Flows are short-lived so this stays small.
         self._pending: dict[int, dict] = {}
 
     def _write_record(self, record: dict) -> None:
-        with open(self.output_path, "a") as f:
+        with open(self.output_path, "a", encoding="utf-8") as f:
             f.write(json.dumps(record, ensure_ascii=False) + "\n")
+
+    def _block_response(self, provider_name, dlp_result, flow) -> http.Response:
+        """Build the response for a DLP-blocked request.
+
+        Overlay enabled (default): a provider-neutral 403 JSON carrying
+        X-PromptShield-* headers; the injected overlay reads them and shows an
+        in-page toast — no new tab. Disabled: fall back to the branded HTML page
+        opened in the user's browser.
+        """
+        if self.overlay.enabled:
+            origin = flow.request.headers.get("Origin", "")
+            body, headers = build_block_response(provider_name, dlp_result, origin)
+            return http.Response.make(403, body, headers)
+        html_body = render_blocked_page(provider_name, dlp_result)
+        _open_blocked_in_browser(html_body)
+        return http.Response.make(
+            403,
+            html_body.encode("utf-8"),
+            {"Content-Type": "text/html; charset=utf-8"},
+        )
+
+    def _maybe_inject_overlay(self, flow: http.HTTPFlow) -> None:
+        """Splice the overlay <script> into supported provider HTML page loads so
+        the in-page block toast can run. Only touches successful text/html GETs
+        from configured provider hosts. Fail-open: any error is logged and the
+        original response is left untouched."""
+        if not self.overlay.enabled or flow.response is None:
+            return
+        if flow.request.pretty_host not in self.overlay.inject_hosts:
+            return
+        ctype = flow.response.headers.get("Content-Type", "")
+        if not should_inject(ctype, flow.response.status_code, flow.request.method):
+            return
+        try:
+            html_text = flow.response.get_text(strict=False)
+            if not html_text:
+                return
+            new_text = inject_overlay(html_text, self._script_tag)
+            if new_text != html_text:
+                # mitmproxy re-encodes per Content-Encoding and fixes Content-Length.
+                flow.response.text = new_text
+                if self.overlay.strip_csp:
+                    # Provider CSPs block inline scripts; drop them on the pages we
+                    # inject into so the overlay can execute (our own proxied traffic).
+                    flow.response.headers.pop("Content-Security-Policy", None)
+                    flow.response.headers.pop("Content-Security-Policy-Report-Only", None)
+        except Exception as exc:
+            _dlp_log.warning("overlay: injection skipped (%s)", exc)
 
     def request(self, flow: http.HTTPFlow) -> None:
         host = flow.request.pretty_host
@@ -106,13 +157,7 @@ class LLMDetector:
                     "response": None,
                     "dlp": _dlp_summary(dlp_result),
                 })
-                html_body = render_blocked_page(provider.name, dlp_result)
-                _open_blocked_in_browser(html_body)
-                flow.response = http.Response.make(
-                    403,
-                    html_body.encode("utf-8"),
-                    {"Content-Type": "text/html; charset=utf-8"},
-                )
+                flow.response = self._block_response(provider.name, dlp_result, flow)
                 return
 
             self._pending[id(flow)] = {
@@ -126,6 +171,9 @@ class LLMDetector:
             return  # first matching provider wins
 
     def response(self, flow: http.HTTPFlow) -> None:
+        # Page loads (not prompt turns) get the overlay injected here.
+        self._maybe_inject_overlay(flow)
+
         info = self._pending.pop(id(flow), None)
         if info is None:
             return

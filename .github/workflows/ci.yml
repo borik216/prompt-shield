@@ -24,3 +24,6 @@ jobs:
 
       - name: DLP smoke tests
         run: python tests/test_dlp.py
+
+      - name: Overlay injection + block-response tests
+        run: python tests/test_overlay.py

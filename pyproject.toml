@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "promptshield"
+version = "0.1.0"
+description = "mitmproxy-based tool that detects hosted LLM traffic, scans outgoing prompts with DLP, and records clean JSONL per conversation turn."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+dependencies = ["mitmproxy"]
+
+[project.optional-dependencies]
+# NLP-backed PII detection. Also needs a spaCy model:
+#   python -m spacy download en_core_web_lg
+dlp = ["presidio-analyzer", "presidio-anonymizer"]
+dashboard = ["fastapi", "uvicorn[standard]", "jinja2"]
+
+[project.scripts]
+promptshield = "cli:main"
+
+[tool.setuptools]
+py-modules = ["cli"]
+packages = ["detector", "dlp", "dashboard", "recorder"]
+
+[tool.setuptools.package-data]
+detector = ["providers.yaml"]
+dlp = ["config.yaml", "blocked_page.html"]
+dashboard = ["templates/*"]

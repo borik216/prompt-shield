@@ -86,6 +86,20 @@ def render_blocked_page(provider_slug: str, dlp_result: dict) -> str:
         return _fallback(provider, data_types)
 
 
+def block_message(provider_slug: str, dlp_result: dict) -> str:
+    """Short plain-text block notice for the in-chat synth response.
+
+    Same provider label + detected-data summary as the HTML page, condensed to a
+    single line the chat UI can render as an assistant turn.
+    """
+    provider = PROVIDER_DISPLAY.get(provider_slug, provider_slug or "the AI provider")
+    data_types = _data_types(dlp_result or {})
+    return (
+        f"\U0001F6E1️ PromptShield blocked this prompt before it reached "
+        f"{provider}.\nDetected: {data_types}.\n\n{_MESSAGE}"
+    )
+
+
 def _fallback(provider: str, data_types: str) -> str:
     """Minimal self-contained page used if the template can't be loaded/rendered."""
     return (
