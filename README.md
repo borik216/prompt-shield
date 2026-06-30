@@ -1,7 +1,15 @@
 # PromptShield
 
-**Catch sensitive data before it leaves your browser.** A man-in-the-middle proxy that inspects, scans, and logs your traffic to hosted LLM assistants — ChatGPT, Claude, Gemini, Perplexity, and Grok.
+**Catch sensitive data before it leaves your browser.**  
+A man-in-the-middle proxy that inspects, scans, and logs your traffic to hosted LLM assistants — ChatGPT, Claude, Gemini, Perplexity, and Grok.
 
+[![CI](https://github.com/borik216/prompt-shield/actions/workflows/ci.yml/badge.svg)](https://github.com/borik216/prompt-shield/actions/workflows/ci.yml)
+![Python 3.10+](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)
+![mitmproxy](https://img.shields.io/badge/mitmproxy-TLS%20proxy-6E4AFF)
+![FastAPI](https://img.shields.io/badge/FastAPI-009688?logo=fastapi&logoColor=white)
+![htmx](https://img.shields.io/badge/htmx-3366CC?logo=htmx&logoColor=white)
+![Presidio](https://img.shields.io/badge/Presidio-PII%20detection-0078D4?logo=microsoft&logoColor=white)
+![License: MIT](https://img.shields.io/badge/License-MIT-green)
 
 <p align="center">
   <video
@@ -13,17 +21,11 @@
   </video>
 </p>
 
-### *PromptShield detects an exposed API key, email address, and private key in a prompt, blocks the request before it reaches the LLM, and logs the incident in real time.*
-
-[![CI](https://github.com/borik216/prompt-shield/actions/workflows/ci.yml/badge.svg)](https://github.com/borik216/prompt-shield/actions/workflows/ci.yml)
-![Python 3.10+](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)
-![mitmproxy](https://img.shields.io/badge/mitmproxy-TLS%20proxy-6E4AFF)
-![FastAPI](https://img.shields.io/badge/FastAPI-009688?logo=fastapi&logoColor=white)
-![htmx](https://img.shields.io/badge/htmx-3366CC?logo=htmx&logoColor=white)
-![Presidio](https://img.shields.io/badge/Presidio-PII%20detection-0078D4?logo=microsoft&logoColor=white)
-![License: MIT](https://img.shields.io/badge/License-MIT-green)
-
+<p align="center">
+  <em>PromptShield detects an exposed API key, email address, and private key, blocks the prompt before it reaches the LLM, and logs the incident in real time.</em>
+</p>
 Every hosted AI assistant streams its replies in its own undocumented wire format. PromptShield sits in the middle as a TLS-terminating proxy, reverse-engineers five of those formats back into clean text, and scans every outgoing prompt for secrets and PII **before it ever leaves your machine** — so a pasted AWS key or customer record is blocked in the browser instead of landing in someone else's logs. Every captured turn flows into a live dashboard.
+
 
 Built in a weekend, but not a toy: real TLS interception, real PII detection, and the same techniques enterprise DLP tooling uses for real.
 
